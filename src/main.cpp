@@ -9,27 +9,7 @@
  #include <iostream>
  #include <string>
  #include <vector>
-
- class Field {
- public:
-     sf::Vector2u gridPos;
-     bool swapped = false;
-     sf::Sprite backside;
-
-     virtual bool isClicked();
-         //return backside.getGlobalBounds().contains(x, y);
-
-     virtual void drawField();
-
-      virtual void clickAction();
-
- };
-
- class EmptyField: public Field{
- public:
-     
- };
-
+ #include <random>
 
 const std::string TEXTURES_PATH = "../textures";
 const std::vector<std::string> TEXTURE_NAMES = {"Mine.jpg",
@@ -43,6 +23,8 @@ const int windowX = 800;
 const int windowY = 600;
 sf::RenderWindow window(sf::VideoMode(windowX, windowY), "My window");
 
+auto rng = std::default_random_engine();
+
 const int gridRows = 10;
 const int gridCols = 10;
 int gridX = 0;
@@ -50,6 +32,106 @@ int gridY = 0;
 int gridSizeX = windowX;
 int gridSizeY = windowY;
 sf::Sprite grid[gridCols][gridRows];
+
+int gridTemplate[gridCols][gridRows];
+
+//-------------------------------------------------------------------------
+void rescaleSprite(sf::Sprite* sprite, sf::Vector2f size);
+
+
+class Field {
+public:
+    //sf::Vector2u gridPos;
+    bool swapped;
+    sf::Sprite backside;
+
+    Field(){ swapped = false; }
+
+    virtual bool isClicked(sf::Vector2f pos);
+        //return backside.getGlobalBounds().contains(pos);
+
+    virtual void drawField(sf::RenderWindow* window);
+
+};
+
+class EmptyField: public Field{
+public:
+    sf::RectangleShape *front;
+
+    EmptyField(sf::Vector2f pos, sf::Vector2f size){
+        front = new sf::RectangleShape(pos);
+        front->setSize(size);
+    }
+
+    ~EmptyField(){
+        delete front;
+    }
+
+    bool isClicked(sf::Vector2f pos){
+        return backside.getGlobalBounds().contains(pos);
+    }
+
+    void drawField(sf::RenderWindow* window){
+        (swapped) ? window->draw(*front) : window->draw(backside);
+    }
+};
+
+class MineField: public Field{
+public:
+    sf::Sprite *front;
+
+    MineField(sf::Vector2f pos, sf::Vector2f size){
+        front = new sf::Sprite();
+        front->setTexture(*textures[0]);
+        front->setPosition(pos);
+        rescaleSprite(front, size);
+    }
+
+    ~MineField(){
+        delete front;
+    }
+
+    bool isClicked(sf::Vector2f pos){
+        return backside.getGlobalBounds().contains(pos);
+    }
+
+    void drawField(sf::RenderWindow* window){
+        (swapped) ? window->draw(*front) : window->draw(backside);
+    }
+
+};
+
+class NumberField: public Field{
+public:
+    sf::RectangleShape *front;
+    sf::Text fieldText;
+
+    NumberField(sf::Vector2f pos, sf::Vector2f size){
+        front = new sf::RectangleShape(pos);
+        front->setSize(size);
+
+        fieldText.setString("8");
+        fieldText.setCharacterSize(size.y);
+        fieldText.setFillColor(sf::Color::Blue);
+    }
+
+    ~NumberField(){
+        delete front;
+    }
+
+    bool isClicked(sf::Vector2f pos){
+        return backside.getGlobalBounds().contains(pos);
+    }
+
+    void drawField(sf::RenderWindow* window){
+        if(swapped) window->draw(*front);
+        else {
+           window->draw(backside);
+           window->draw(fieldText);
+        }
+    }
+
+};
 
 //-------------------------------------------------------------------------
 
@@ -84,17 +166,12 @@ void initGrid(){
     float fieldX = (windowX - 2 * padding) / gridRows - spacing * ((float)(gridRows-1) / gridRows);
     float fieldY = (windowY - 2 * padding) / gridCols - spacing * ((float)(gridCols-1) / gridCols);
 
-    //scaling factor for each card
-    sf::Vector2u fieldtxtrSize = textures[1]->getSize();
-    float fieldtxtrScaleX =  fieldX / fieldtxtrSize.x;
-    float fieldtxtrScaleY =  fieldY / fieldtxtrSize.y;
-
     //set Texture, size and position for each card
     for(int i = 0; i < gridCols; i++){
         for(int j = 0; j < gridRows; j++){
 
             grid[i][j].setTexture(*textures[1]);
-            grid[i][j].setScale(sf::Vector2f(fieldtxtrScaleX, fieldtxtrScaleY));
+            rescaleSprite(&grid[i][j], sf::Vector2f(fieldX, fieldY));
             grid[i][j].setPosition(sf::Vector2f(padding + ((fieldX + spacing) * j ),
                  padding + (fieldY + spacing) * i ));
         }
@@ -104,9 +181,12 @@ void initGrid(){
 }
 
 //set size in pixels
-void rescaleSprite(sf::Sprite* sprite, int x, int y){
-    sprite->setScale(sf::Vector2f(x / (float)sprite->getTexture()->getSize().x,
-     y / (float)sprite->getTexture()->getSize().y));
+void rescaleSprite(sf::Sprite* sprite, sf::Vector2f size){
+    if (sprite->getTexture() != NULL) {
+        sprite->setScale(sf::Vector2f(size.x / (float)sprite->getTexture()->getSize().x,
+         size.y / (float)sprite->getTexture()->getSize().y));
+    }
+
     return;
 }
 
@@ -155,6 +235,16 @@ void playErrorSound(){
     return;
 }
 
+void prepareGrid(int numMines){
+    int numFields = gridCols * gridRows;
+    std::vector<int> nums(numFields);
+    for(int i = 0; i < nums.size(); i++)
+        nums.push_back(i);
+
+
+    std::shuffle(std::begin(nums), std::end(nums), rng);
+    //todo
+}
 
 /*  TODO:
 *   function: objClicked() that finds out which clickables were clicked.
@@ -170,6 +260,8 @@ int main()
 {
 
     loadTextures();
+
+    //prepareGrid(10);
 
     initGrid();
 
@@ -227,8 +319,6 @@ int main()
 
         //draw everything here
 
-        //window.draw(minesprt);
-        //window.draw(fieldsprt);
         drawGrid();
 
         //end the current frame
